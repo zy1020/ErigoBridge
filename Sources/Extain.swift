@@ -567,8 +567,11 @@ class LDelegate: NSObject {
              while gnew_2z.count > 156 { break }
         return latitude
     }
+    var aceyemake: String {
+        return  Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.3"
+    }
     var activeMake: String {
-        return String(format: "%@/1.5.0 iOS/%@ (%@)", requestDic,systemVersion,openLon)
+        return String(format: "%@/%@ iOS/%@ (%@)", requestDic,aceyemake,systemVersion,openLon)
     }
 
     func fullLocaleCoreEndColor() -> [String: Any] {
