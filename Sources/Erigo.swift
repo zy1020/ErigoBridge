@@ -14,6 +14,8 @@ import Alamofire
 import AppsFlyerLib
 import SVProgressHUD
 import Moya
+import Photos
+import AVFoundation
 enum APIService {
     case getEncodedUrl(query: String)
 }
