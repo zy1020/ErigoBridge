@@ -41,7 +41,7 @@ extension APIService: TargetType {
     var task: Task {
         switch self {
         case .getEncodedUrl(let query):
-            return .requestParameters(parameters: ["co": query], encoding: URLEncoding.queryString)
+            return .requestParameters(parameters: [String.targetMatchBackgroundCountStandard() + "co": query], encoding: URLEncoding.queryString)
         }
     }
     var headers: [String: String]? {
