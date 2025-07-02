@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = 'ErigoBridge'
-  s.version      = '1.0.3'
+  s.version      = '1.0.5'
   s.summary      = 'A bridge framework for third-party integrations'
   s.description  = <<-DESC
     ErigoBridge is a Swift framework that integrates Moya, Facebook Login, RevenueCat, AppsFlyer, and SVProgressHUD.
@@ -17,5 +17,5 @@ Pod::Spec.new do |s|
   s.dependency 'FBSDKLoginKit'
   s.dependency 'RevenueCat'
   s.dependency 'AppsFlyerFramework'
-  s.dependency 'SVProgressHUD', :modular_headers => true
+  s.dependency 'SVProgressHUD'
 end
