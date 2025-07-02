@@ -1,5 +1,5 @@
 Pod::Spec.new do |s|
-  s.name         = 'ErigoBridge'
+  s.name         = 'VideoExtain'
   s.version      = '1.1.0'
   s.summary      = 'A bridge framework for third-party integrations'
   s.description  = <<-DESC
