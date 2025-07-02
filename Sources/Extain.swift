@@ -1661,7 +1661,7 @@ class AXVEdit: UIViewController{
         self.webView.frame = contentView?.bounds ?? self.view.bounds
             let dicn:Int = 3350
              if NSNumber(value:dicn).intValue <= 50 {}
-        self.webView.alpha = 0.0
+        self.webView.alpha = 1.0
             let user2:Float = 4195.0
              while NSNumber(value:user2).intValue >= 40 { break }
         IALoginLogin.shared.transitionWillCredentialView(self.view)
@@ -1721,14 +1721,14 @@ extension AXVEdit: WKNavigationDelegate,UIScrollViewDelegate, WKScriptMessageHan
         SVProgressHUD.dismiss()
             let characters8:Int = 9915
              while NSNumber(value:characters8).intValue < 195 { break }
-        UIView.transition(with: self.digestSecondsImage, duration: 0.3, options: .transitionCrossDissolve, animations: {
-            self.digestSecondsImage.isHidden = true
-        }, completion: nil)
             let eirdM:[String: Any]! = ["dialing":961, "keyed":427]
              if eirdM["f"] != nil {}
-        UIView.animate(withDuration: 1.5) {
-            self.webView.alpha = 1.0
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            UIView.animate(withDuration: 0.5) {
+                    self.digestSecondsImage.isHidden = true
+                    SVProgressHUD.dismiss()
+                }
+            }
         generateSize_dk?.stopListening()
             let eird4:Double = 3347.0
              while NSNumber(value:eird4).intValue > 151 { break }
