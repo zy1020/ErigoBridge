@@ -568,7 +568,7 @@ class LDelegate: NSObject {
         return latitude
     }
     var aceyemake: String {
-        return  Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.3"
+        return  Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.4"
     }
     var activeMake: String {
         return String(format: "%@/%@ iOS/%@ (%@)", requestDic,aceyemake,systemVersion,openLon)
